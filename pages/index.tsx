@@ -242,7 +242,7 @@ const clothingItems: ClothingItem[] = [
                     }}
                   >
                     <div className={styles.productImage}>
-                      <div className={styles.productEmoji}>{item.image}</div>
+                      <img src={item.image} alt={item.name} className={styles.productImageTag} />
                       <button
                         className={styles.favoriteBtn}
                         onClick={(e) => {
