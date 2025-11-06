@@ -2,6 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios'; // You already have axios in package.json
+import FormData from 'form-data';
 
 // Primary run endpoint we tried (subdomain). We'll fall back to alternative shapes if needed.
 const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/virtual_tryon";
@@ -12,22 +13,21 @@ const HF_API_URL_ALT = "https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on
  * Helper function to download an image from a URL and convert it to a base64 string.
  * The Gradio API needs the image data, not just a URL to it.
  */
-const imageUrlToBase64 = async (url: string) => {
+const imageUrlToBuffer = async (url: string) => {
   try {
     const response = await axios.get(url, {
       responseType: 'arraybuffer'
     });
-    
+
     // Infer mime type from URL extension
     const ext = url.split('.').pop()?.toLowerCase() || 'png';
     const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
-    const buffer = Buffer.from(response.data, 'binary').toString('base64');
-    // Return a data URI — we'll strip the prefix later if the HF API expects raw base64
-    return `data:${mimeType};base64,${buffer}`;
+    const buffer = Buffer.from(response.data, 'binary');
+    return { buffer, mimeType };
   } catch (error) {
     console.error(`Failed to fetch or convert image URL: ${url}`, error);
-    throw new Error("Failed to fetch garment image");
+    throw new Error('Failed to fetch garment image');
   }
 };
 
@@ -50,33 +50,55 @@ export default async function handler(
       return res.status(400).json({ message: 'Missing image data' });
     }
     
-    // 3. CONVERT THE GARMENT IMAGE URL TO BASE64
-    const garmentImageB64WithPrefix = await imageUrlToBase64(garmentImage);
+    // 3. PREPARE IMAGE BUFFERS
+    // Convert human data-uri (from browser) to buffer
+    const stripDataUri = (dataUri: string) => dataUri.replace(/^data:[^;]+;base64,/, '');
+    const humanB64 = stripDataUri(humanImage);
+    const humanBuffer = Buffer.from(humanB64, 'base64');
+    // Try to infer mime type from the data URI prefix
+    const humanMimeMatch = humanImage.match(/^data:([^;]+);base64,/);
+    const humanMime = humanMimeMatch ? humanMimeMatch[1] : 'image/jpeg';
 
-    // Gradio's HTTP API for image inputs expects data-URI (e.g. "data:image/png;base64,...")
-    // Your Space's `process_image` uses file path inputs and the Gradio client will accept
-    // data-URI strings for images. We will send the full data URIs for both images.
-    const humanDataUri = humanImage; // already a data URI from the browser
-    const garmentDataUri = garmentImageB64WithPrefix; // helper returned a data URI
+    // Fetch garment image as buffer
+    const { buffer: garmentBuffer, mimeType: garmentMime } = await imageUrlToBuffer(garmentImage);
 
     // Log a small summary for debugging (do NOT log full images in production)
     console.log('Calling HF Space', {
       HF_API_URL,
-      humanSize: humanDataUri?.length ?? 0,
-      garmentSize: garmentDataUri?.length ?? 0,
+      humanBytes: humanBuffer.length,
+      garmentBytes: garmentBuffer.length,
     });
 
     // 4. CALL THE HUGGING FACE GRADIO API
     // We'll try a small sequence of candidate endpoints to handle differences in Space routing.
-    const candidates = [HF_API_URL, HF_API_URL_ALT, HF_API_URL.replace('/virtual_tryon', '/predict'), HF_API_URL_ALT.replace('/virtual_tryon', '/predict')];
+    const candidates = [
+      HF_API_URL,
+      HF_API_URL_ALT,
+      HF_API_URL.replace('/virtual_tryon', '/predict'),
+      HF_API_URL_ALT.replace('/virtual_tryon', '/predict'),
+    ];
 
     let lastError: any = null;
     let hfResponse: any = null;
 
     for (const url of candidates) {
       try {
-        console.log(`Posting to HF endpoint: ${url}`);
-        hfResponse = await axios.post(url, { data: [humanDataUri, garmentDataUri] }, { timeout: 60000 });
+        console.log(`Posting to HF endpoint (multipart): ${url}`);
+
+        // Build multipart/form-data payload
+        const form = new FormData();
+        // Append files as repeated 'data' fields (Gradio accepts file parts in the data array)
+        form.append('data', humanBuffer, { filename: 'human.jpg', contentType: humanMime });
+        form.append('data', garmentBuffer, { filename: 'garment.jpg', contentType: garmentMime });
+
+        const headers = Object.assign({}, form.getHeaders(), { Accept: 'application/json' });
+
+        hfResponse = await axios.post(url, form, {
+          headers,
+          timeout: 60000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        });
         // If we got here without throwing, we have a response (could be 200)
         if (hfResponse?.status === 200 || hfResponse?.data) {
           console.log(`HF endpoint responded (status=${hfResponse.status}) to ${url}`);
