@@ -105,14 +105,24 @@ const clothingItems: ClothingItem[] = [
 
   const capturePhoto = () => {
     if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
       const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      const canvas = canvasRef.current;
+
+      // Resize before capturing to reduce payload size (helps avoid 413 from HF)
+      // Target width is 512px (adjustable). Preserve aspect ratio.
+      const targetWidth = 512;
+      const ratio = video.videoWidth && video.videoHeight ? (video.videoHeight / video.videoWidth) : (480 / 640);
+      const targetHeight = Math.round(targetWidth * ratio);
+
+      // Use an offscreen canvas for the scaled capture
+      const offscreen = document.createElement('canvas');
+      offscreen.width = targetWidth;
+      offscreen.height = targetHeight;
+      const ctx = offscreen.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0);
-        const imageData = canvas.toDataURL('image/png');
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+        // Use JPEG with quality to further reduce size
+        const imageData = offscreen.toDataURL('image/jpeg', 0.75);
         setHumanImage(imageData);
         stopCamera();
       }
