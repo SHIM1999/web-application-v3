@@ -4,9 +4,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios'; // You already have axios in package.json
 
 // 1. YOUR HUGGING FACE SPACE URL
-// I got this from your screenshot and app.py.
-// Make sure you add api_name="virtual_tryon" to your app.py file!
-const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/predict";
+// Based on the provided `app.py`, the Gradio Blocks button uses api_name="virtual_tryon",
+// so the Space exposes the run endpoint at `/run/virtual_tryon`.
+const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/virtual_tryon";
 
 /**
  * Helper function to download an image from a URL and convert it to a base64 string.
@@ -53,20 +53,24 @@ export default async function handler(
     // 3. CONVERT THE GARMENT IMAGE URL TO BASE64
     const garmentImageB64WithPrefix = await imageUrlToBase64(garmentImage);
 
-    // Helper to strip data URI prefix if present. Many HF/Gradio endpoints prefer raw base64
-    const stripDataUri = (dataUri: string) => dataUri.replace(/^data:[^;]+;base64,/, '');
+    // Gradio's HTTP API for image inputs expects data-URI (e.g. "data:image/png;base64,...")
+    // Your Space's `process_image` uses file path inputs and the Gradio client will accept
+    // data-URI strings for images. We will send the full data URIs for both images.
+    const humanDataUri = humanImage; // already a data URI from the browser
+    const garmentDataUri = garmentImageB64WithPrefix; // helper returned a data URI
 
-    // Ensure we send plain base64 strings (without the `data:*;base64,` prefix)
-    const humanB64 = stripDataUri(humanImage);
-    const garmentB64 = stripDataUri(garmentImageB64WithPrefix);
+    // Log a small summary for debugging (do NOT log full images in production)
+    console.log('Calling HF Space', {
+      HF_API_URL,
+      humanSize: humanDataUri?.length ?? 0,
+      garmentSize: garmentDataUri?.length ?? 0,
+    });
 
     // 4. CALL THE HUGGING FACE GRADIO API
-    // Add a reasonable timeout and propagate HF errors back with more context
+    // Send the full data URIs as the `data` array inputs; Gradio will accept them.
     const hfResponse = await axios.post(
       HF_API_URL,
-      {
-        data: [humanB64, garmentB64],
-      },
+      { data: [humanDataUri, garmentDataUri] },
       { timeout: 60000 }
     );
 
