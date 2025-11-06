@@ -6,7 +6,7 @@ import axios from 'axios'; // You already have axios in package.json
 // 1. YOUR HUGGING FACE SPACE URL
 // I got this from your screenshot and app.py.
 // Make sure you add api_name="virtual_tryon" to your app.py file!
-const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/virtual_tryon";
+const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/predict";
 
 /**
  * Helper function to download an image from a URL and convert it to a base64 string.

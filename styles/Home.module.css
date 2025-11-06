@@ -400,3 +400,10 @@
   object-fit: cover; /* This makes the image cover the area nicely */
   border-radius: 10px; /* Optional: to match your card style */
 }
+
+.detailImageTag {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 20px;
+  object-fit: cover;
+}
