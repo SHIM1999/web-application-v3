@@ -33,7 +33,7 @@ const clothingItems: ClothingItem[] = [
     name: '클래식 셔츠', 
     price: '39,900원', 
     category: 'shirts', 
-    image: '👔', 
+    image: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg', 
     color: '화이트', 
     imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg' 
   },
