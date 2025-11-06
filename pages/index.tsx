@@ -155,15 +155,23 @@ const clothingItems: ClothingItem[] = [
         })
       });
 
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '처리 실패');
+      }
+
       const result = await response.json();
+      console.log('Result:', result);
       
       if (result.data && result.data[0]) {
         setResultImage(result.data[0]);
         setActiveView('result');
+      } else {
+        alert('결과 이미지를 받지 못했습니다');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('처리 중 오류가 발생했습니다');
+      alert('처리 중 오류가 발생했습니다: ' + (error as Error).message);
     } finally {
       setIsProcessing(false);
     }
