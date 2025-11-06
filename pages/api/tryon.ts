@@ -23,6 +23,7 @@ const imageUrlToBase64 = async (url: string) => {
     const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
     const buffer = Buffer.from(response.data, 'binary').toString('base64');
+    // Return a data URI — we'll strip the prefix later if the HF API expects raw base64
     return `data:${mimeType};base64,${buffer}`;
   } catch (error) {
     console.error(`Failed to fetch or convert image URL: ${url}`, error);
@@ -50,19 +51,27 @@ export default async function handler(
     }
     
     // 3. CONVERT THE GARMENT IMAGE URL TO BASE64
-    // Now both images are in the base64 format the API expects.
-    const garmentImageB64 = await imageUrlToBase64(garmentImage);
+    const garmentImageB64WithPrefix = await imageUrlToBase64(garmentImage);
+
+    // Helper to strip data URI prefix if present. Many HF/Gradio endpoints prefer raw base64
+    const stripDataUri = (dataUri: string) => dataUri.replace(/^data:[^;]+;base64,/, '');
+
+    // Ensure we send plain base64 strings (without the `data:*;base64,` prefix)
+    const humanB64 = stripDataUri(humanImage);
+    const garmentB64 = stripDataUri(garmentImageB64WithPrefix);
 
     // 4. CALL THE HUGGING FACE GRADIO API
-    const hfResponse = await axios.post(HF_API_URL, {
-      data: [
-        humanImage,       // The base64 string from your camera
-        garmentImageB64,  // The base64 string from the garment URL
-      ],
-    });
+    // Add a reasonable timeout and propagate HF errors back with more context
+    const hfResponse = await axios.post(
+      HF_API_URL,
+      {
+        data: [humanB64, garmentB64],
+      },
+      { timeout: 60000 }
+    );
 
     // 5. SEND THE RESULT BACK TO YOUR FRONTEND
-    // Your frontend code (result.data[0]) will work perfectly with this
+    // Gradio usually returns an object with `data: [<base64-image-or-url>, ...]`
     res.status(200).json(hfResponse.data);
 
   } catch (error) {
