@@ -25,14 +25,69 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  const clothingItems: ClothingItem[] = [
-    { id: 1, name: '클래식 셔츠', price: '39,900원', category: 'shirts', image: '👔', color: '화이트', imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg' },
-    { id: 2, name: '슬림핏 청바지', price: '54,900원', category: 'pants', image: '👖', color: '네이비' },
-    { id: 3, name: '여름 원피스', price: '42,900원', category: 'dresses', image: '👗', color: '핑크' },
-    { id: 4, name: '스포츠 재킷', price: '79,900원', category: 'jackets', image: '🧥', color: '블랙' },
-    { id: 5, name: '이브닝 드레스', price: '129,900원', category: 'dresses', image: '👗', color: '레드' },
-    { id: 6, name: '운동화', price: '69,900원', category: 'shoes', image: '👟', color: '화이트' },
-  ];
+  // In pages/index.tsx
+
+const clothingItems: ClothingItem[] = [
+  { 
+    id: 1, 
+    name: '클래식 셔츠', 
+    price: '39,900원', 
+    category: 'shirts', 
+    image: '👔', 
+    color: '화이트', 
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg' 
+  },
+  { 
+    id: 2, 
+    name: '슬림핏 청바지', 
+    price: '54,900원', 
+    category: 'pants', 
+    image: '👖', 
+    color: '네이비',
+    // ADD THIS (check filename)
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg' 
+  },
+  { 
+    id: 3, 
+    name: '여름 원피스', 
+    price: '42,900원', 
+    category: 'dresses', 
+    image: '👗', 
+    color: '핑크',
+    // ADD THIS (check filename)
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg'
+  },
+  { 
+    id: 4, 
+    name: '스포츠 재킷', 
+    price: '79,900원', 
+    category: 'jackets', 
+    image: '🧥', 
+    color: '블랙',
+    // ADD THIS (check filename)
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg'
+  },
+  { 
+    id: 5, 
+    name: '이브닝 드레스', 
+    price: '129,900원', 
+    category: 'dresses', 
+    image: '👗', 
+    color: '레드',
+    // ADD THIS (check filename)
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg'
+  },
+  { 
+    id: 6, 
+    name: '운동화', 
+    price: '69,900원', 
+    category: 'shoes', 
+    image: '👟', 
+    color: '화이트',
+    // ADD THIS (check filename)
+    imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg'
+  },
+];
 
   const startCamera = async () => {
     try {
