@@ -3,10 +3,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios'; // You already have axios in package.json
 
-// 1. YOUR HUGGING FACE SPACE URL
-// Based on the provided `app.py`, the Gradio Blocks button uses api_name="virtual_tryon",
-// so the Space exposes the run endpoint at `/run/virtual_tryon`.
+// Primary run endpoint we tried (subdomain). We'll fall back to alternative shapes if needed.
 const HF_API_URL = "https://mukhammed19-virtual-try-on-app.hf.space/run/virtual_tryon";
+// Alternate endpoint using the canonical huggingface.co/spaces path (sometimes differs in proxied setups)
+const HF_API_URL_ALT = "https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/run/virtual_tryon";
 
 /**
  * Helper function to download an image from a URL and convert it to a base64 string.
@@ -67,16 +67,44 @@ export default async function handler(
     });
 
     // 4. CALL THE HUGGING FACE GRADIO API
-    // Send the full data URIs as the `data` array inputs; Gradio will accept them.
-    const hfResponse = await axios.post(
-      HF_API_URL,
-      { data: [humanDataUri, garmentDataUri] },
-      { timeout: 60000 }
-    );
+    // We'll try a small sequence of candidate endpoints to handle differences in Space routing.
+    const candidates = [HF_API_URL, HF_API_URL_ALT, HF_API_URL.replace('/virtual_tryon', '/predict'), HF_API_URL_ALT.replace('/virtual_tryon', '/predict')];
+
+    let lastError: any = null;
+    let hfResponse: any = null;
+
+    for (const url of candidates) {
+      try {
+        console.log(`Posting to HF endpoint: ${url}`);
+        hfResponse = await axios.post(url, { data: [humanDataUri, garmentDataUri] }, { timeout: 60000 });
+        // If we got here without throwing, we have a response (could be 200)
+        if (hfResponse?.status === 200 || hfResponse?.data) {
+          console.log(`HF endpoint responded (status=${hfResponse.status}) to ${url}`);
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        // Log concise info for debugging, avoid dumping large bodies
+        const status = err?.response?.status;
+        const bodyPreview = err?.response?.data ? JSON.stringify(err.response.data).slice(0, 200) : String(err.message);
+        console.warn(`HF attempt failed for ${url}: status=${status}, body=${bodyPreview}`);
+        // try next candidate
+        hfResponse = null;
+        continue;
+      }
+    }
+
+    if (!hfResponse) {
+      // All attempts failed. Return helpful debug info to the caller (but keep images out).
+      const status = lastError?.response?.status ?? 'no-response';
+      const body = lastError?.response?.data ?? lastError?.message ?? 'unknown';
+      console.error('All HF endpoints failed. Last error status:', status);
+      return res.status(502).json({ message: 'Hugging Face Space request failed', status, body });
+    }
 
     // 5. SEND THE RESULT BACK TO YOUR FRONTEND
     // Gradio usually returns an object with `data: [<base64-image-or-url>, ...]`
-    res.status(200).json(hfResponse.data);
+    return res.status(200).json(hfResponse.data);
 
   } catch (error) {
     console.error("Error in /api/tryon:", error);
