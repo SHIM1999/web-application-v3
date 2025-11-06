@@ -311,14 +311,13 @@ const clothingItems: ClothingItem[] = [
               <h1>상품 상세</h1>
             </div>
             <div className={styles.detailContent}>
-          <div className={styles.detailImage}>
-                <img
-                  src={selectedItem.image}
-                  alt={selectedItem.name}
-                  className={styles.detailImageTag}
-                />
-              </div>  
-           </div>
+              <div className={styles.detailImage}>
+                <img 
+                  src={selectedItem.image} 
+                  alt={selectedItem.name} 
+                  className={styles.detailImageTag} 
+                 />
+              </div>
               <div className={styles.detailInfo}>
                 <h2>{selectedItem.name}</h2>
                 <p className={styles.price}>{selectedItem.price}</p>
