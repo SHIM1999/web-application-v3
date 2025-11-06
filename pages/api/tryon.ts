@@ -93,27 +93,41 @@ export default async function handler(
 
         const headers = Object.assign({}, form.getHeaders(), { Accept: 'application/json' });
 
-        // Compute Content-Length to avoid "Too little data for declared Content-Length"
-        // Some proxies require an explicit Content-Length instead of chunked transfer.
+        // Try to get the full multipart body as a Buffer so we can set an exact Content-Length.
+        // This avoids proxies truncating chunked uploads or mismatching lengths.
         try {
-          const len: number = await new Promise((resolve, reject) => {
-            form.getLength((err: any, length: number) => {
-              if (err) return reject(err);
-              resolve(length);
-            });
-          });
-          headers['Content-Length'] = len;
-        } catch (err) {
-          // If we can't compute length, continue without it (server may accept chunked)
-          console.warn('Could not compute form length, proceeding without Content-Length', String(err));
-        }
+          // form.getBuffer() works when all parts are in-memory (we used Buffers above).
+          const fullBuffer: Buffer = (form as any).getBuffer();
+          headers['Content-Length'] = fullBuffer.length;
 
-        hfResponse = await axios.post(url, form, {
-          headers,
-          timeout: 60000,
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-        });
+          hfResponse = await axios.post(url, fullBuffer, {
+            headers,
+            timeout: 60000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          });
+        } catch (bufferErr) {
+          // Fallback: stream form (may still work in many environments)
+          console.warn('Could not build full form buffer, falling back to streaming form upload', String(bufferErr));
+          try {
+            const len: number = await new Promise((resolve, reject) => {
+              form.getLength((err: any, length: number) => {
+                if (err) return reject(err);
+                resolve(length);
+              });
+            });
+            headers['Content-Length'] = len;
+          } catch (lenErr) {
+            console.warn('Could not compute form length, proceeding without Content-Length', String(lenErr));
+          }
+
+          hfResponse = await axios.post(url, form, {
+            headers,
+            timeout: 60000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          });
+        }
         // If we got here without throwing, we have a response (could be 200)
         if (hfResponse?.status === 200 || hfResponse?.data) {
           console.log(`HF endpoint responded (status=${hfResponse.status}) to ${url}`);
