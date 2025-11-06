@@ -93,6 +93,21 @@ export default async function handler(
 
         const headers = Object.assign({}, form.getHeaders(), { Accept: 'application/json' });
 
+        // Compute Content-Length to avoid "Too little data for declared Content-Length"
+        // Some proxies require an explicit Content-Length instead of chunked transfer.
+        try {
+          const len: number = await new Promise((resolve, reject) => {
+            form.getLength((err: any, length: number) => {
+              if (err) return reject(err);
+              resolve(length);
+            });
+          });
+          headers['Content-Length'] = len;
+        } catch (err) {
+          // If we can't compute length, continue without it (server may accept chunked)
+          console.warn('Could not compute form length, proceeding without Content-Length', String(err));
+        }
+
         hfResponse = await axios.post(url, form, {
           headers,
           timeout: 60000,
