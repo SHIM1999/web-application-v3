@@ -71,77 +71,85 @@ export default async function handler(
 
     // 4. CALL THE HUGGING FACE GRADIO API
     // We'll try a small sequence of candidate endpoints to handle differences in Space routing.
+    // Prefer the Space subdomain run endpoint. Avoid huggingface.co/html endpoints (they return 404/HTML).
     const candidates = [
       HF_API_URL,
-      HF_API_URL_ALT,
       HF_API_URL.replace('/virtual_tryon', '/predict'),
-      HF_API_URL_ALT.replace('/virtual_tryon', '/predict'),
     ];
 
     let lastError: any = null;
     let hfResponse: any = null;
 
     for (const url of candidates) {
+      console.log(`Posting to HF endpoint (multipart): ${url}`);
+
+      // Build multipart/form-data payload
+      const form = new FormData();
+      form.append('data', humanBuffer, { filename: 'human.jpg', contentType: humanMime });
+      form.append('data', garmentBuffer, { filename: 'garment.jpg', contentType: garmentMime });
+
+      const baseHeaders = form.getHeaders();
+      baseHeaders['Accept'] = 'application/json';
+
+      // First try: build the full in-memory Buffer and send that (gives an exact Content-Length).
+      // This should succeed because we appended Buffers for both parts.
       try {
-        console.log(`Posting to HF endpoint (multipart): ${url}`);
+  const fullBuffer = (form as any).getBuffer();
+        const headers = { ...baseHeaders, 'Content-Length': String(fullBuffer.length) };
+        console.log('Built full multipart buffer, bytes=', fullBuffer.length);
 
-        // Build multipart/form-data payload
-        const form = new FormData();
-        // Append files as repeated 'data' fields (Gradio accepts file parts in the data array)
-        form.append('data', humanBuffer, { filename: 'human.jpg', contentType: humanMime });
-        form.append('data', garmentBuffer, { filename: 'garment.jpg', contentType: garmentMime });
-
-        const headers = Object.assign({}, form.getHeaders(), { Accept: 'application/json' });
-
-        // Try to get the full multipart body as a Buffer so we can set an exact Content-Length.
-        // This avoids proxies truncating chunked uploads or mismatching lengths.
         try {
-          // form.getBuffer() works when all parts are in-memory (we used Buffers above).
-          const fullBuffer: Buffer = (form as any).getBuffer();
-          headers['Content-Length'] = fullBuffer.length;
-
           hfResponse = await axios.post(url, fullBuffer, {
             headers,
             timeout: 60000,
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
           });
-        } catch (bufferErr) {
-          // Fallback: stream form (may still work in many environments)
-          console.warn('Could not build full form buffer, falling back to streaming form upload', String(bufferErr));
-          try {
-            const len: number = await new Promise((resolve, reject) => {
-              form.getLength((err: any, length: number) => {
-                if (err) return reject(err);
-                resolve(length);
-              });
+        } catch (networkErr: any) {
+          // Network/HTTP failure for this URL, capture and try next candidate
+          lastError = networkErr;
+          const status = networkErr?.response?.status;
+          const bodyPreview = networkErr?.response?.data ? JSON.stringify(networkErr.response.data).slice(0, 200) : String(networkErr.message);
+          console.warn(`HF attempt failed for ${url}: status=${status}, body=${bodyPreview}`);
+          hfResponse = null;
+          continue;
+        }
+      } catch (bufErr: any) {
+        // getBuffer() failed (rare when using streams). Fall back to streaming upload and try to compute length.
+        console.warn('Could not build full form buffer, falling back to streaming form upload', String(bufErr));
+        const headers = { ...baseHeaders };
+        try {
+          const len: number = await new Promise((resolve, reject) => {
+            form.getLength((err: any, length: number) => {
+              if (err) return reject(err);
+              resolve(length);
             });
-            headers['Content-Length'] = len;
-          } catch (lenErr) {
-            console.warn('Could not compute form length, proceeding without Content-Length', String(lenErr));
-          }
+          });
+          headers['Content-Length'] = String(len);
+        } catch (lenErr) {
+          console.warn('Could not compute form length, proceeding without Content-Length', String(lenErr));
+        }
 
+        try {
           hfResponse = await axios.post(url, form, {
             headers,
             timeout: 60000,
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
           });
+        } catch (networkErr: any) {
+          lastError = networkErr;
+          const status = networkErr?.response?.status;
+          const bodyPreview = networkErr?.response?.data ? JSON.stringify(networkErr.response.data).slice(0, 200) : String(networkErr.message);
+          console.warn(`HF streaming attempt failed for ${url}: status=${status}, body=${bodyPreview}`);
+          hfResponse = null;
+          continue;
         }
-        // If we got here without throwing, we have a response (could be 200)
-        if (hfResponse?.status === 200 || hfResponse?.data) {
-          console.log(`HF endpoint responded (status=${hfResponse.status}) to ${url}`);
-          break;
-        }
-      } catch (err: any) {
-        lastError = err;
-        // Log concise info for debugging, avoid dumping large bodies
-        const status = err?.response?.status;
-        const bodyPreview = err?.response?.data ? JSON.stringify(err.response.data).slice(0, 200) : String(err.message);
-        console.warn(`HF attempt failed for ${url}: status=${status}, body=${bodyPreview}`);
-        // try next candidate
-        hfResponse = null;
-        continue;
+      }
+
+      if (hfResponse?.status === 200 || hfResponse?.data) {
+        console.log(`HF endpoint responded (status=${hfResponse.status}) to ${url}`);
+        break;
       }
     }
 
