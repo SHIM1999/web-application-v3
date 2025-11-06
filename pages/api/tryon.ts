@@ -94,9 +94,18 @@ export default async function handler(
       // First try: build the full in-memory Buffer and send that (gives an exact Content-Length).
       // This should succeed because we appended Buffers for both parts.
       try {
-  const fullBuffer = (form as any).getBuffer();
+        const fullBuffer = (form as any).getBuffer();
         const headers = { ...baseHeaders, 'Content-Length': String(fullBuffer.length) };
-        console.log('Built full multipart buffer, bytes=', fullBuffer.length);
+        // Diagnostic logs: size, boundary (if available), and tail bytes to detect truncated uploads.
+        const boundary = typeof (form as any).getBoundary === 'function' ? (form as any).getBoundary() : (form as any)._boundary || '<no-boundary>';
+        let tailPreview = '';
+        try {
+          const tail = fullBuffer.slice(Math.max(0, fullBuffer.length - 256));
+          tailPreview = tail.toString('base64').slice(0, 400); // limited preview
+        } catch (e) {
+          tailPreview = '<could-not-slice-buffer>';
+        }
+        console.log('Built full multipart buffer, bytes=', fullBuffer.length, 'boundary=', boundary, 'tailPreview=', tailPreview ? `${tailPreview.length}b` : '');
 
         try {
           hfResponse = await axios.post(url, fullBuffer, {
@@ -105,6 +114,13 @@ export default async function handler(
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
           });
+          console.log('HF network send complete, response status=', hfResponse?.status);
+          try {
+            const preview = hfResponse?.data ? JSON.stringify(hfResponse.data).slice(0, 800) : '<no-body>';
+            console.log('HF response preview:', preview);
+          } catch (e) {
+            console.log('HF response preview: <could-not-stringify>');
+          }
         } catch (networkErr: any) {
           // Network/HTTP failure for this URL, capture and try next candidate
           lastError = networkErr;
@@ -116,7 +132,7 @@ export default async function handler(
         }
       } catch (bufErr: any) {
         // getBuffer() failed (rare when using streams). Fall back to streaming upload and try to compute length.
-        console.warn('Could not build full form buffer, falling back to streaming form upload', String(bufErr));
+  console.warn('Could not build full form buffer, falling back to streaming form upload', String(bufErr));
         const headers = { ...baseHeaders };
         try {
           const len: number = await new Promise((resolve, reject) => {
@@ -137,6 +153,13 @@ export default async function handler(
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
           });
+          console.log('HF streaming send complete, response status=', hfResponse?.status);
+          try {
+            const preview = hfResponse?.data ? JSON.stringify(hfResponse.data).slice(0, 800) : '<no-body>';
+            console.log('HF response preview (stream):', preview);
+          } catch (e) {
+            console.log('HF response preview (stream): <could-not-stringify>');
+          }
         } catch (networkErr: any) {
           lastError = networkErr;
           const status = networkErr?.response?.status;
