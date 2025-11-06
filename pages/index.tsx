@@ -26,7 +26,7 @@ export default function Home() {
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   const clothingItems: ClothingItem[] = [
-    { id: 1, name: '클래식 셔츠', price: '39,900원', category: 'shirts', image: '👔', color: '화이트', imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/blob/main/example/cloth/cloth02.jpg' },
+    { id: 1, name: '클래식 셔츠', price: '39,900원', category: 'shirts', image: '👔', color: '화이트', imageUrl: 'https://huggingface.co/spaces/MUKHAMMED19/virtual-try-on-app/resolve/main/example/cloth/cloth02.jpg' },
     { id: 2, name: '슬림핏 청바지', price: '54,900원', category: 'pants', image: '👖', color: '네이비' },
     { id: 3, name: '여름 원피스', price: '42,900원', category: 'dresses', image: '👗', color: '핑크' },
     { id: 4, name: '스포츠 재킷', price: '79,900원', category: 'jackets', image: '🧥', color: '블랙' },
